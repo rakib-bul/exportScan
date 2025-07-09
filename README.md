@@ -1,6 +1,8 @@
 # ExportScan
 A Python-powered tool to automate export data validation for garment manufacturing workflows.
 
+![Alt text](Assets\ui.png)
+
 ## Purpose
 I built this tool to save hours of manual work at my workplace (Southern Garments Ltd.) by automating the cross-checking of Logic export data vs. Store export data.
 ### Note: This is a personal project and not officially affiliated with Southern Garments Ltd. or Renaissance Group.
