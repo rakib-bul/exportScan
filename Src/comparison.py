@@ -78,18 +78,22 @@ def compare_excel_files(file1_path: str, file2_path: str, status_var, result_tex
             df2['ponumber'].notna() &
             df2['ponumber'].isin(df1['ponumber'])
         )
-        
+
+        # Group df1 by PO number to sum exfactoryqty for POs with multiple entries
+        po_grouped = df1.groupby('ponumber')['exfactoryqty'].sum().reset_index()
+
         for idx in df2[po_mask].index:
             if df2.at[idx, STATUS_COLUMN] != "Not Checked":
                 continue
-                
+                    
             po_val = df2.at[idx, 'ponumber']
-            match = df1[df1['ponumber'] == po_val]
+            # Get the total exfactoryqty for this PO
+            total_exfactory = po_grouped[po_grouped['ponumber'] == po_val]['exfactoryqty'].values
             
-            if not match.empty:
-                exfactory_qty = match.iloc[0]['exfactoryqty']
+            if len(total_exfactory) > 0:
+                exfactory_qty = total_exfactory[0]
                 ship_qty = df2.at[idx, 'shipqty']
-                
+                        
                 # Check if export quantity is empty
                 if pd.isna(exfactory_qty) or exfactory_qty == '':
                     df2.at[idx, STATUS_COLUMN] = 'No Shipment (PO Match)'
@@ -110,20 +114,25 @@ def compare_excel_files(file1_path: str, file2_path: str, status_var, result_tex
         job_po_mask = (
             (df2[STATUS_COLUMN] == "Not Checked") &
             df2['jobno_last4'].notna() & 
-            df2['ponumber'].notna() &
-            df2['jobno_last4'].isin(df1['jobno_last4']) &
-            df2['ponumber'].isin(df1['ponumber'])
+            df2['ponumber'].notna()
         )
-        
+
+        # Create a grouped version of df1 for Job+PO matching
+        df1['job_po_key'] = df1['jobno_last4'] + '_' + df1['ponumber'].astype(str)
+        job_po_grouped = df1.groupby('job_po_key')['exfactoryqty'].sum().reset_index()
+
         for idx in df2[job_po_mask].index:
             job_val = df2.at[idx, 'jobno_last4']
             po_val = df2.at[idx, 'ponumber']
-            match = df1[(df1['jobno_last4'] == job_val) & (df1['ponumber'] == po_val)]
+            job_po_key = f"{job_val}_{po_val}"
             
-            if not match.empty:
-                exfactory_qty = match.iloc[0]['exfactoryqty']
+            # Get the total exfactoryqty for this Job+PO combination
+            total_exfactory = job_po_grouped[job_po_grouped['job_po_key'] == job_po_key]['exfactoryqty'].values
+            
+            if len(total_exfactory) > 0:
+                exfactory_qty = total_exfactory[0]
                 ship_qty = df2.at[idx, 'shipqty']
-                
+                        
                 # Check if export quantity is empty
                 if pd.isna(exfactory_qty) or exfactory_qty == '':
                     df2.at[idx, STATUS_COLUMN] = 'No Shipment (Job+PO Match)'
@@ -176,6 +185,8 @@ def compare_excel_files(file1_path: str, file2_path: str, status_var, result_tex
         
         # Drop temporary columns before returning
         df2 = df2.drop(columns=['jobno_last4'])
+        if 'job_po_key' in df1.columns:
+            df1 = df1.drop(columns=['job_po_key'])
         
         # Generate summary report
         summary = (
@@ -201,6 +212,7 @@ def compare_excel_files(file1_path: str, file2_path: str, status_var, result_tex
         error_msg = f"Error during processing: {str(e)}"
         logging.error(error_msg, exc_info=True)
         return None, error_msg
+    
 
 def show_summary_stats(df: pd.DataFrame) -> dict:
     return {

@@ -1,4 +1,3 @@
-# main.py
 import os
 import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox, Menu
