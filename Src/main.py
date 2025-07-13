@@ -5,6 +5,7 @@ import logging
 from comparison import compare_excel_files, show_summary_stats
 from file_handling import browse_file, update_recent_files, load_recent_file
 from gui_utils import show_guide, show_developer_info
+from constants import BUYER_SPECIFIC_BUYERS
 
 # Configure logging
 logging.basicConfig(
@@ -13,11 +14,12 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+
 class ExportCheckerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Export Scan - Alpha Build 0.2.0")
-        self.root.geometry("900x700")
+        self.root.title("Export Scan - Alpha Build 0.3.1")
+        self.root.geometry("900x720")
         self.recent_files = []
         self.setup_ui()
         
@@ -60,6 +62,31 @@ class ExportCheckerApp:
         
         # Configure grid weights
         frame_files.columnconfigure(1, weight=1)
+        
+        # Buyer-Specific Options Frame
+        options_frame = ttk.LabelFrame(self.root, text="Comparison Options")
+        options_frame.pack(padx=10, pady=5, fill='x')
+        
+        # Buyer-specific matching checkbox
+        self.buyer_specific_var = tk.BooleanVar(value=False)
+        buyer_specific_cb = ttk.Checkbutton(
+            options_frame,
+            text=f"Enable Buyer-Specific Matching ({', '.join(BUYER_SPECIFIC_BUYERS)})",
+            variable=self.buyer_specific_var
+        )
+        buyer_specific_cb.pack(anchor='w', padx=5, pady=2)
+        
+        # Frame for combined PO selection
+        combine_frame = ttk.Frame(options_frame)
+        combine_frame.pack(fill='x', padx=5, pady=2)
+        ttk.Label(combine_frame, text="Combine PO with StyleRefNo for:").pack(side='left')
+        
+        # Radio buttons for file selection
+        self.combine_po_var = tk.StringVar(value="df1")
+        ttk.Radiobutton(combine_frame, text="Source File", 
+                        variable=self.combine_po_var, value="df1").pack(side='left', padx=5)
+        ttk.Radiobutton(combine_frame, text="Target File", 
+                        variable=self.combine_po_var, value="df2").pack(side='left', padx=5)
         
         # Progress/Status
         status_frame = ttk.Frame(self.root)
@@ -105,13 +132,23 @@ class ExportCheckerApp:
             messagebox.showerror("Error", "Please select both Excel files")
             return
         
+        # Get buyer-specific options
+        buyer_specific = self.buyer_specific_var.get()
+        combine_po_in = self.combine_po_var.get()
+        
         self.status_var.set("Processing...")
         self.progress_bar.start(10)
         self.result_text.delete(1.0, tk.END)
         self.root.update_idletasks()
         
         try:
-            result, error = compare_excel_files(file1, file2, self.status_var, self.result_text)
+            result, error = compare_excel_files(
+                file1, file2, 
+                self.status_var, 
+                self.result_text,
+                buyer_specific,
+                combine_po_in
+            )
             
             if error:
                 messagebox.showerror("Error", error)

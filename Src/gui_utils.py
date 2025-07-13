@@ -16,23 +16,29 @@ def show_guide():
      * Color
      * ExFactoryQty (Source file)
      * ShipQty (Target file)
+   - For buyer-specific matching (NEXT/Vogue), target file must have 'Buyer' column
 
-2. DATA CLEANING:
+2. BUYER-SPECIFIC FEATURES (NEXT/Vogue):
+   - Enable "Buyer-Specific Matching" checkbox
+   - Select which file to create combined PO (StyleRefNo + PO)
+   - Matching sequence:
+     1. PO Number + Job Number (last 4 digits)
+     2. Combined PO (StyleRefNo + PO) 
+
+3. DATA CLEANING:
    - Remove empty rows above the header
    - Ensure consistent formatting (text vs numbers)
    - Check for merged cells - unmerge them
    - Remove special characters from column names
 
-3. FORMATTING TIPS:
-   - Save files as .xlsx format
-   - Use one row per record
-   - Keep consistent data types in columns
-   - Remove unnecessary sheets
-
 4. MATCHING PRIORITY:
-   - First: Match by PO Number only
-   - Second: Match by Job No (last 4 digits) + PO Number
-   - Third: Match by Style Reference + Color
+   - For standard buyers:
+     * First: Match by PO Number only
+     * Second: Match by Job No (last 4 digits) + PO Number
+     * Third: Match by Style Reference + Color
+   - For NEXT/Vogue buyers:
+     * First: Match by PO Number + Job Number
+     * Second: Match by Combined PO (StyleRefNo + PO Number)
 
 5. TROUBLESHOOTING:
    - If matching fails, check for:
@@ -55,8 +61,8 @@ def show_developer_info():
     info_text = """=== Developer Information ===
 
 Application: Export Scan
-Version: Alpha 0.2.0
-Last Updated: 2025-07-09
+Version: Alpha 0.3.1
+Last Updated: 2025-07-14
 
 Developer: Rakib Hasan Bulbul
 Organization: SGL
