@@ -24,6 +24,7 @@ def show_guide():
    - Matching sequence:
      1. PO Number + Job Number (last 4 digits)
      2. Combined PO (StyleRefNo + PO) 
+     3. Job No wise aggregation (if previous matches fail)
 
 3. DATA CLEANING:
    - Remove empty rows above the header
@@ -39,6 +40,7 @@ def show_guide():
    - For NEXT/Vogue buyers:
      * First: Match by PO Number + Job Number
      * Second: Match by Combined PO (StyleRefNo + PO Number)
+     * Third: Match by Job No wise aggregation
 
 5. TROUBLESHOOTING:
    - If matching fails, check for:

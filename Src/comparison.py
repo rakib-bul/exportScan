@@ -4,7 +4,7 @@ import os
 import tkinter as tk
 import logging
 from typing import Tuple, Optional
-from constants import REQUIRED_COLS_DF1, REQUIRED_COLS_DF2, STATUS_COLUMN, BUYER_SPECIFIC_BUYERS
+from constants import REQUIRED_COLS_DF1, REQUIRED_COLS_DF2, STATUS_COLUMN, BUYER_SPECIFIC_BUYERS, JOB_LEVEL_STATUS
 
 def clean_column_name(col: str) -> str:
     return str(col).strip().lower().replace(' ', '').replace('_', '').replace('-', '')
@@ -34,6 +34,14 @@ def compare_excel_files(
 ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     try:
         logging.info(f"Starting comparison with buyer_specific={buyer_specific}, combine_po_in={combine_po_in}")
+        
+        # Initialize job-level counters
+        job_level_counters = {
+            'job_level_ok': 0,
+            'job_level_less': 0,
+            'job_level_over': 0,
+            'job_level_no_ship': 0
+        }
         
         # Validate files
         for path in [file1_path, file2_path]:
@@ -105,7 +113,8 @@ def compare_excel_files(
             'po_match': 0, 'job_po_match': 0, 'style_color_match': 0,
             'no_match': 0, 'qty_mismatch': 0, 'less_shipment': 0,
             'over_shipment': 0, 'no_shipment': 0,
-            'buyer_po_job': 0, 'buyer_combined': 0
+            'buyer_po_job': 0, 'buyer_combined': 0,
+            **job_level_counters  # Include job-level counters
         }
         
         # Prepare buyer-specific masks
@@ -346,6 +355,59 @@ def compare_excel_files(
                     result_text.insert(tk.END, f"Processed {idx} rows...\n")
                     result_text.see(tk.END)
                     result_text.update_idletasks()
+            
+            # THIRD: Match by Job No wise aggregation
+            result_text.insert(tk.END, "3. Buyer Matching by Job No wise aggregation...\n")
+            result_text.update()
+            
+            # Get indices of unmatched buyer-specific rows
+            unmatched_buyer_mask = (
+                buyer_mask &
+                (df2[STATUS_COLUMN] == "Not Checked")
+            )
+            unmatched_indices = df2[unmatched_buyer_mask].index
+            
+            if not unmatched_indices.empty:
+                # Create job-level mapping
+                job_mapping = {}
+                for idx in unmatched_indices:
+                    job_val = df2.at[idx, 'jobno_last4']
+                    if job_val not in job_mapping:
+                        job_mapping[job_val] = []
+                    job_mapping[job_val].append(idx)
+                
+                # Process each job group
+                for job_val, indices in job_mapping.items():
+                    # Get total shipment quantity for this job
+                    total_ship_qty = df2.loc[indices, 'shipqty'].sum()
+                    
+                    # Get total exfactory quantity from df1
+                    job_exfactory = df1[df1['jobno_last4'] == job_val]['exfactoryqty'].sum()
+                    
+                    # Calculate variance
+                    variance = total_ship_qty - job_exfactory
+                    
+                    # Set status for all rows in this job group
+                    status = JOB_LEVEL_STATUS
+                    if job_exfactory == 0:
+                        status += " - No Shipment"
+                        job_level_counters['job_level_no_ship'] += len(indices)
+                    elif variance == 0:
+                        status += " - Ok"
+                        job_level_counters['job_level_ok'] += len(indices)
+                    elif variance > 0:
+                        status += f" - Over Shipment ({variance})"
+                        job_level_counters['job_level_over'] += len(indices)
+                    else:
+                        status += f" - Less Shipment ({abs(variance)})"
+                        job_level_counters['job_level_less'] += len(indices)
+                    
+                    # Update all rows in this job group
+                    for idx in indices:
+                        df2.at[idx, STATUS_COLUMN] = status
+        
+        # Update match_counts with job-level results
+        match_counts.update(job_level_counters)
         
         # Handle unmatched buyer-specific rows
         if buyer_specific:
@@ -375,6 +437,10 @@ def compare_excel_files(
             f"Standard Perfect Matches: {match_counts['po_match'] + match_counts['job_po_match'] + match_counts['style_color_match']}\n"
             f"Buyer PO+Job Matches: {match_counts['buyer_po_job']}\n"
             f"Buyer Combined PO Matches: {match_counts['buyer_combined']}\n"
+            f"Job Level Matches (Ok): {match_counts['job_level_ok']}\n"
+            f"Job Level Less Shipment: {match_counts['job_level_less']}\n"
+            f"Job Level Over Shipment: {match_counts['job_level_over']}\n"
+            f"Job Level No Shipment: {match_counts['job_level_no_ship']}\n"
             f"Less Shipment Cases: {match_counts['less_shipment']}\n"
             f"Over Shipment Cases: {match_counts['over_shipment']}\n"
             f"No Shipment Cases: {match_counts['no_shipment']}\n"
@@ -398,9 +464,20 @@ def compare_excel_files(
     
 
 def show_summary_stats(df: pd.DataFrame) -> dict:
-    return {
+    stats = {
         'Total Records': len(df),
         'Perfect Matches': len(df[df[STATUS_COLUMN].str.startswith('Ok')]),
         'Quantity Mismatches': len(df[df[STATUS_COLUMN].str.contains('Shipment')]),
         'No Matches': len(df[df[STATUS_COLUMN] == 'No Match Found'])
     }
+    
+    # Add job-level statistics
+    job_level_rows = df[df[STATUS_COLUMN].str.startswith(JOB_LEVEL_STATUS)]
+    if not job_level_rows.empty:
+        stats['Job Level Matches'] = len(job_level_rows)
+        stats['Job Level - Ok'] = len(job_level_rows[job_level_rows[STATUS_COLUMN].str.contains('- Ok')])
+        stats['Job Level - Less Shipment'] = len(job_level_rows[job_level_rows[STATUS_COLUMN].str.contains('Less Shipment')])
+        stats['Job Level - Over Shipment'] = len(job_level_rows[job_level_rows[STATUS_COLUMN].str.contains('Over Shipment')])
+        stats['Job Level - No Shipment'] = len(job_level_rows[job_level_rows[STATUS_COLUMN].str.contains('No Shipment')])
+    
+    return stats
